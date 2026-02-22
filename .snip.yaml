@@ -1,0 +1,201 @@
+version: 1
+root: .
+name: anomaly-detection-localization
+default_profile: dev
+
+output:
+  dir: /home/user1306/tmp
+  pattern: anomaly-detection-localization_{profile}_{ts}_{gitsha}.md
+  latest: ""
+  stdout_default: false
+
+render:
+  format: md
+  newline: "\n"
+  code_fences: true
+  include_tree: true
+  tree_depth: 4
+  include_manifest: true
+  manifest:
+    group_by_slice: true
+    include_line_counts: true
+    include_byte_counts: true
+    include_truncation_notes: true
+    include_unreadable_notes: true
+  file_block:
+    header: "<<<FILE:{path}>>>"
+    footer: ""
+
+budgets:
+  max_chars: 160000
+  per_file_max_lines: 800
+  per_file_max_bytes: 393216
+  drop_policy: drop_low_priority
+
+ignore:
+  use_gitignore: true
+  always:
+    - .git/**
+    - .snip/**
+    - .venv/**
+    - .pytest_cache/**
+    - .mypy_cache/**
+    - .ruff_cache/**
+    - __pycache__/**
+    - htmlcov/**
+    - coverage/**
+    - dist/**
+    - build/**
+    - node_modules/**
+    - target/**
+    - api-fastapi-microservice/.git/**
+    - api-fastapi-microservice/.venv/**
+    - api-fastapi-microservice/.pytest_cache/**
+    - api-fastapi-microservice/.ruff_cache/**
+  binary_extensions:
+    - .png
+    - .jpg
+    - .jpeg
+    - .gif
+    - .pdf
+    - .zip
+    - .tar
+    - .gz
+    - .7z
+    - .exe
+    - .dll
+    - .so
+    - .dylib
+
+sensitive:
+  exclude_globs:
+    - .env*
+    - "**/*secret*"
+    - "**/*secrets*"
+    - "**/*.pem"
+    - "**/*.key"
+    - "**/id_rsa*"
+    - "**/*serviceAccount*.json"
+
+slices:
+  api:
+    include:
+      - app/main.py
+      - app/api/**
+    exclude: []
+    priority: 100
+
+  core:
+    include:
+      - app/core/**
+    exclude: []
+    priority: 90
+
+  tests:
+    include:
+      - tests/**
+    exclude: []
+    priority: 70
+
+  configs:
+    include:
+      - pyproject.toml
+      - poetry.lock
+      - .env.example
+      - "**/*.toml"
+      - "**/*.yaml"
+      - "**/*.yml"
+      - "**/*.ini"
+      - "**/*.json"
+    exclude: []
+    priority: 60
+
+  docs:
+    include:
+      - README*
+      - CLAUDE.md
+      - LICENSE
+    exclude: []
+    priority: 50
+
+  infra:
+    include:
+      - Dockerfile
+      - .github/workflows/**
+    exclude: []
+    priority: 40
+
+  scripts:
+    include:
+      - "**/*.sh"
+      - "**/*.bash"
+      - "**/*.zsh"
+    exclude: []
+    priority: 20
+
+  template_snapshot:
+    include:
+      - api-fastapi-microservice/**
+    exclude: []
+    priority: 5
+
+profiles:
+  minimal:
+    enable:
+      - api
+      - core
+    budgets:
+      max_chars: 90000
+    render:
+      tree_depth: 3
+
+  api:
+    enable:
+      - api
+      - core
+      - configs
+      - docs
+    budgets:
+      max_chars: 140000
+    render:
+      tree_depth: 4
+
+  dev:
+    enable:
+      - api
+      - core
+      - tests
+      - configs
+      - docs
+      - infra
+    budgets:
+      max_chars: 180000
+    render:
+      tree_depth: 5
+
+  full:
+    enable:
+      - api
+      - core
+      - tests
+      - configs
+      - docs
+      - infra
+      - scripts
+    budgets:
+      max_chars: 240000
+    render:
+      tree_depth: 5
+
+  with-template:
+    enable:
+      - api
+      - core
+      - tests
+      - configs
+      - docs
+      - template_snapshot
+    budgets:
+      max_chars: 300000
+    render:
+      tree_depth: 6
