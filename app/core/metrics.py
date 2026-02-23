@@ -37,45 +37,31 @@ APP_INFO = Info("app_info", "Application information")
 class MetricsCollector:
     """Centralized metrics collection with consistent interface."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = structlog.get_logger(__name__)
 
     def init_app_info(self, app_name: str, version: str) -> None:
-        """Initialize application information metrics."""
         APP_INFO.info({"name": app_name, "version": version, "component": "fastapi-microservice"})
         self.logger.info("Metrics initialized", app_name=app_name, version=version)
 
     def record_request(self, method: str, endpoint: str, status_code: int, duration: float) -> None:
-        """Record HTTP request metrics."""
         REQUEST_COUNT.labels(method=method, endpoint=endpoint, status_code=str(status_code)).inc()
-
         REQUEST_DURATION.labels(method=method, endpoint=endpoint).observe(duration)
 
     def record_error(self, error_type: str, endpoint: str, status_code: int | None = None) -> None:
-        """Record application error metrics."""
         ERROR_COUNT.labels(
             error_type=error_type,
             endpoint=endpoint,
-            status_code=str(status_code) if status_code else "unknown",
+            status_code=str(status_code) if status_code is not None else "unknown",
         ).inc()
 
-        self.logger.debug(
-            "Error metric recorded",
-            error_type=error_type,
-            endpoint=endpoint,
-            status_code=status_code,
-        )
-
     def record_critical_error(self) -> None:
-        """Record critical/unhandled error."""
         CRITICAL_ERRORS.inc()
 
     def increment_active_requests(self) -> None:
-        """Increment active request counter."""
         ACTIVE_REQUESTS.inc()
 
     def decrement_active_requests(self) -> None:
-        """Decrement active request counter."""
         ACTIVE_REQUESTS.dec()
 
 
@@ -83,56 +69,51 @@ metrics = MetricsCollector()
 
 
 def init_metrics(app_name: str, version: str) -> None:
-    """Initialize application metrics."""
     metrics.init_app_info(app_name, version)
 
 
-async def metrics_middleware(request: Request, call_next):
-    """Enhanced middleware to collect comprehensive request metrics."""
-    start_time = time.time()
+def _resolve_endpoint_label(request: Request) -> str:
+    route = request.scope.get("route")
+    path_format = getattr(route, "path_format", None) if route is not None else None
+    return str(path_format or request.url.path)
 
+
+async def metrics_middleware(request: Request, call_next):
+    start_time = time.perf_counter()
     metrics.increment_active_requests()
+    endpoint = _resolve_endpoint_label(request)
 
     try:
         response = await call_next(request)
-        duration = time.time() - start_time
-
+        endpoint = _resolve_endpoint_label(request)
+        duration = time.perf_counter() - start_time
         metrics.record_request(
             method=request.method,
-            endpoint=request.url.path,
-            status_code=request.scope["route"].path_format,
+            endpoint=endpoint,
+            status_code=int(response.status_code),
             duration=duration,
         )
-
         return response
-
     except Exception as e:
-        duration = time.time() - start_time
-
+        endpoint = _resolve_endpoint_label(request)
+        duration = time.perf_counter() - start_time
         metrics.record_request(
             method=request.method,
-            endpoint=request.scope["route"].path_format,
+            endpoint=endpoint,
             status_code=500,
             duration=duration,
         )
-
         metrics.record_error(
             error_type=e.__class__.__name__,
-            endpoint=request.scope["route"].path_format,
+            endpoint=endpoint,
             status_code=500,
         )
-
         raise
-
     finally:
         metrics.decrement_active_requests()
 
 
 def get_metrics() -> tuple[str, str]:
-    """
-    Returns metrics data and content type.
-    Keeps API completely agnostic of Prometheus.
-    """
     try:
         data = generate_latest().decode("utf-8")
         return data, CONTENT_TYPE_LATEST
