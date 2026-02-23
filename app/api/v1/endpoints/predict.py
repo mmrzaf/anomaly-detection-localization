@@ -1,36 +1,54 @@
-import base64
-from typing import Literal
+from typing import Any, Literal
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
+
+from app.api.deps import get_current_settings, get_inference_service
+from app.core.config import Settings
+from app.services.inference import InferenceService
 
 router = APIRouter()
 
 
 class PredictResponse(BaseModel):
-    method: str
+    method: Literal["padim", "student"]
+    category: str
     filename: str
-    content_type: str
-    image_score: float = Field(..., ge=0.0)
+    image_width: int
+    image_height: int
+    score_map_width: int
+    score_map_height: int
+
+    raw_image_score: float = Field(..., ge=0.0)
+    score_z: float
+    calibrated_score: float = Field(..., ge=0.0, le=1.0)
+
+    threshold_raw: float = Field(..., ge=0.0)
+    threshold_calibrated: float = Field(..., ge=0.0, le=1.0)
+    threshold_quantile: float = Field(..., ge=0.0, le=1.0)
     is_anomalous: bool
-    threshold: float = 0.5
-    original_image_base64: str
-    heatmap_image_base64: str
-    overlay_image_base64: str
-    note: str
+
+    model_meta: dict[str, Any]
+    timings_ms: dict[str, float]
+
+    visual_content_type: str | None = None
+    original_image_base64: str | None = None
+    heatmap_image_base64: str | None = None
+    overlay_image_base64: str | None = None
+
+    note: str | None = None
 
 
 @router.post("/predict", response_model=PredictResponse)
 async def predict(
     image: UploadFile = File(...),
     method: Literal["padim", "student"] = Form("padim"),
+    category: str = Form(...),
+    return_visuals: bool | None = Form(None),
+    service: InferenceService = Depends(get_inference_service),
+    settings: Settings = Depends(get_current_settings),
 ) -> PredictResponse:
-    """
-    Minimal demo inference endpoint.
-
-    This is a stub that echoes the uploaded image into all preview slots.
-    Replace the score + generated heatmap/overlay later with real model output.
-    """
     if image.content_type is None or not image.content_type.startswith("image/"):
         raise ValueError("Uploaded file must be an image")
 
@@ -38,21 +56,25 @@ async def predict(
     if not raw:
         raise ValueError("Uploaded image is empty")
 
-    img_b64 = base64.b64encode(raw).decode("utf-8")
+    if len(raw) > settings.request_max_bytes:
+        raise ValueError(f"Uploaded image exceeds max size ({settings.request_max_bytes} bytes)")
 
-    # Stub score (replace with real inference)
-    image_score = 0.12 if method == "padim" else 0.09
-    threshold = 0.50
+    effective_return_visuals = (
+        settings.default_return_visuals if return_visuals is None else bool(return_visuals)
+    )
+
+    result = await run_in_threadpool(
+        service.predict,
+        raw,
+        method,
+        category,
+        effective_return_visuals,
+    )
 
     return PredictResponse(
-        method=method,
+        **result,
         filename=image.filename or "upload",
-        content_type=image.content_type,
-        image_score=image_score,
-        is_anomalous=image_score >= threshold,
-        threshold=threshold,
-        original_image_base64=img_b64,
-        heatmap_image_base64=img_b64,  # placeholder
-        overlay_image_base64=img_b64,  # placeholder
-        note="Stub response: heatmap/overlay currently mirror the uploaded image.",
+        note=None
+        if effective_return_visuals
+        else "Set return_visuals=true to include heatmap/overlay images.",
     )
