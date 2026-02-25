@@ -4,7 +4,7 @@ name: anomaly-detection-localization
 default_profile: dev
 
 output:
-  dir: /home/user1306/tmp
+  dir: /home/darius/tmp
   pattern: anomaly-detection-localization_{profile}_{ts}_{gitsha}.md
   latest: ""
   stdout_default: false
