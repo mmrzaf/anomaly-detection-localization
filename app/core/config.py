@@ -17,8 +17,9 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = "Anomaly Detection and Localization API"
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     app_env: Literal["dev", "stg", "prd"] = "dev"
+    debug: bool = False
 
     # Server
     host: str = "0.0.0.0"
@@ -31,16 +32,25 @@ class Settings(BaseSettings):
 
     # API
     api_prefix: str = "/api"
-    allowed_hosts: list[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1"])
+    allowed_hosts: list[str] = Field(default_factory=lambda: ["*"])
     request_max_bytes: int = 10_000_000  # 10MB (image uploads)
+
     # CORS
     cors_origins: list[str] = Field(default_factory=list)
     cors_credentials: bool = False
-    cors_methods: list[str] = Field(default_factory=lambda: ["GET", "POST", "PUT", "DELETE"])
-    cors_headers: list[str] = Field(default_factory=list)
+    cors_methods: list[str] = Field(default_factory=lambda: ["GET", "POST", "OPTIONS"])
+    cors_headers: list[str] = Field(default_factory=lambda: ["*"])
 
     # Health check
     health_check_details: bool = True
+
+    # Model artifacts / inference
+    model_artifacts_dir: str = "artifacts"
+    inference_device: Literal["auto", "cpu", "cuda", "mps"] = "auto"
+    fail_on_missing_artifacts: bool = True
+
+    # UI / API behavior
+    default_return_visuals: bool = False
 
 
 @lru_cache

@@ -215,8 +215,21 @@ async def request_validation_handler(request, exc: RequestValidationError):
     wrapped = ValidationError(details=details)  # your app error
     return await base_app_exception_handler(request, wrapped)
 
-
 async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+    metrics.record_error(
+        error_type="ValueError",
+        endpoint=request.url.path,
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+    )
+
+    logger.warning(
+        "Value error occurred",
+        message=str(exc),
+        path=request.url.path,
+        method=request.method,
+        request_id=getattr(request.state, "request_id", "unknown"),
+    )
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=ErrorResponseBuilder.build_error_response(
@@ -227,8 +240,6 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         ),
     )
-
-
 exception_handlers = {
     BaseAppException: base_app_exception_handler,
     StarletteHTTPException: http_exception_handler,

@@ -24,13 +24,11 @@ def test_metrics_endpoint(client: TestClient):
 
 
 def test_root_endpoint(client: TestClient):
-    """Test root endpoint."""
+    """Test root endpoint returns demo UI HTML."""
     response = client.get("/")
 
     assert response.status_code == 200
-    data = response.json()
+    assert "text/html" in response.headers["content-type"]
+    assert "Anomaly Detection" in response.text or "anomaly" in response.text.lower()
+    assert "/api/v1/predict" in response.text
 
-    assert "service" in data
-    assert "version" in data
-    assert "status" in data
-    assert data["status"] == "running"
