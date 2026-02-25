@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -50,14 +50,21 @@ async def predict(
     settings: Settings = Depends(get_current_settings),
 ) -> PredictResponse:
     if image.content_type is None or not image.content_type.startswith("image/"):
-        raise ValueError("Uploaded file must be an image")
-
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file must be an image",
+        )
     raw = await image.read()
     if not raw:
-        raise ValueError("Uploaded image is empty")
-
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded image is empty",
+        )
     if len(raw) > settings.request_max_bytes:
-        raise ValueError(f"Uploaded image exceeds max size ({settings.request_max_bytes} bytes)")
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Uploaded image exceeds max size ({settings.request_max_bytes} bytes)",
+        )
 
     effective_return_visuals = (
         settings.default_return_visuals if return_visuals is None else bool(return_visuals)
